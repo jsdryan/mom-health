@@ -138,6 +138,8 @@
   th:first-child, td:first-child { text-align: left; padding-left: 18px; }
   th:last-child, td:last-child { padding-right: 18px; }
   td { padding: 8px; border-top: 1px solid var(--border); text-align: right; vertical-align: top; }
+  @media (max-width: 480px) { th, td { padding-left: 5px; padding-right: 5px; } th { font-size: 11px; } }
+  th { white-space: nowrap; }
   td .portion { display: block; font-size: 12px; color: var(--text-muted); }
   .tip { margin: 0; padding: 10px 18px 14px; font-size: 13px; color: var(--text-secondary); border-top: 1px solid var(--border); }
   .tip::before { content: "建議　"; font-weight: 700; color: var(--text-primary); }
@@ -208,8 +210,42 @@
     "tdee": 1617,
     "measuredAt": "2026-10-25"
   },
-  "targets": { "kcal": 1300, "protein": 80, "carbs": 150, "fat": 42 },
-  "days": []
+  "targets": {
+    "kcal": 1300,
+    "protein": 80,
+    "carbs": 150,
+    "fat": 42
+  },
+  "days": [
+    {
+      "date": "2026-11-01",
+      "note": "",
+      "meals": [
+        {
+          "type": "早餐",
+          "items": [
+            {
+              "name": "水煮蛋",
+              "amount": "1 顆（約 50 g 可食）",
+              "carbs": 0.4,
+              "protein": 6.8,
+              "fat": 4.8,
+              "kcal": 72
+            },
+            {
+              "name": "蛋白粉（植物性）",
+              "amount": "1 平匙 10 g，依包裝標示",
+              "carbs": 0.3,
+              "protein": 8,
+              "fat": 0.5,
+              "kcal": 38
+            }
+          ],
+          "tip": "蛋白質有 15 g，開頭不錯，但整份只有 110 kcal、幾乎沒有碳水，到中午容易餓。可以加一份澱粉，例如半條地瓜、一片全麥吐司或 30 g 燕麥，再加一份水果，讓早餐到 300 kcal 左右。"
+        }
+      ]
+    }
+  ]
 }
 </script>
 
