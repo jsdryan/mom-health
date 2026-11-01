@@ -105,7 +105,6 @@
   .days {
     display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; margin-top: 18px;
     scrollbar-width: none; scroll-snap-type: x proximity; scroll-behavior: smooth;
-    mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
   }
   .days::-webkit-scrollbar { display: none; }
   .day-btn {
@@ -200,6 +199,8 @@
   .bar { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(0); transition: transform .7s var(--ease) calc(var(--i) * 45ms), opacity .25s; }
   .in .bar { transform: scaleY(1); }
   .hit { cursor: pointer; }
+  .wdot { opacity: 0; transition: opacity .4s calc(.3s + var(--i) * 30ms); }
+  .in .wdot { opacity: 1; }
   .hit text { transition: fill .2s; }
   .hit.sel text { fill: var(--text-primary); font-weight: 700; }
   .hit .sel-mark { opacity: 0; transition: opacity .25s; }
@@ -283,7 +284,7 @@
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const TODAY = iso(new Date());
 
-  let DATA, T, P, days = [], current = null, isDemo = false;
+  let DATA, T, P, days = [], weights = null, current = null, isDemo = false;
 
   /* ---------- 計算 ---------- */
   const itemKcal = it => it.kcal != null ? it.kcal : it.carbs * 4 + it.protein * 4 + it.fat * 9;
@@ -370,6 +371,17 @@
     return out;
   }
 
+  function demoWeights() {
+    let seed = 777; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const out = [], base = new Date(TODAY + 'T00:00:00');
+    for (let k = 20; k >= 0; k--) {
+      if (k && rnd() < .15) continue;
+      const d = new Date(base); d.setDate(d.getDate() - k);
+      out.push({ date: iso(d), kg: Math.round((62.65 - (20 - k) * 0.045 + (rnd() - .5) * 0.9) * 10) / 10 });
+    }
+    return out;
+  }
+
   /* ---------- 主畫面 ---------- */
   async function boot() {
     isDemo = location.hash === '#demo';
@@ -389,6 +401,7 @@
     }
     T = DATA.targets; P = DATA.profile;
     days = (isDemo ? demoDays() : [...DATA.days]).sort((a, b) => a.date.localeCompare(b.date));
+    weights = (isDemo ? demoWeights() : [...(DATA.weights || [])]).sort((a, b) => a.date.localeCompare(b.date));
     current = days.length ? days[days.length - 1].date : null;
     renderShell();
   }
@@ -419,10 +432,17 @@
         <div class="stats" id="stats"></div>
         <div class="legend" id="trendLegend"></div>
         <div class="chart-box" id="trend"></div>
+      </section>
+      <section class="card mt rv" style="--i:5" id="weightCard">
+        <h2>體重走勢</h2>
+        <div class="stats" id="wstats"></div>
+        <div class="legend" id="wlegend"></div>
+        <div class="chart-box" id="wchart"></div>
+        <p class="why" id="wnote"></p>
       </section>`;
     app.classList.add('fade-swap');
     play(app);
-    renderTabs(); renderDay(0); renderTrend();
+    renderTabs(); renderDay(0); renderTrend(); renderWeight();
   }
 
   function renderTabs() {
@@ -436,11 +456,18 @@
         <div class="mini"><i class="${k > T.kcal * 1.05 ? 'over' : ''}" style="--w:${pct}%"></i></div></button>`;
     }).join('');
     el.querySelectorAll('button').forEach(b => b.onclick = () => goTo(b.dataset.date));
-    centerTab();
+    el.onscroll = updateFade;
+    centerTab(); updateFade();
   }
   function updateTabs() {
     $('#days').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.date === current));
     centerTab();
+  }
+  function updateFade() {
+    const el = $('#days'); if (!el) return;
+    const l = el.scrollLeft > 2, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    const m = (l || r) ? `linear-gradient(90deg, ${l ? 'transparent 0, #000 28px' : '#000 0'}, ${r ? '#000 calc(100% - 28px), transparent 100%' : '#000 100%'})` : 'none';
+    el.style.maskImage = el.style.webkitMaskImage = m;
   }
   function centerTab() {
     const el = $('#days'), sel = el.querySelector('[aria-pressed="true"]');
@@ -616,6 +643,80 @@
     $('#trend').querySelectorAll('.hit').forEach(el => el.classList.toggle('sel', trendMeta.recent[+el.dataset.i].date === current));
   }
 
+
+  /* ---------- 體重走勢 ---------- */
+  const dayNum = s => Math.round(new Date(s + 'T00:00:00').getTime() / 864e5);
+  function movingAvg(ws) {
+    return ws.map(w => {
+      const n = dayNum(w.date), win = ws.filter(v => { const m = dayNum(v.date); return m <= n && m > n - 7; });
+      return win.reduce((a, v) => a + v.kg, 0) / win.length;
+    });
+  }
+  function renderWeight() {
+    const ws = weights, box = $('#wchart');
+    const hint = '每天早上起床、上完廁所、吃東西前量一次，傳給我就會畫在這裡。單日差 0.5–1 公斤很正常，看藍色的 7 天平均線就好。';
+    if (!ws.length) {
+      $('#wstats').innerHTML = ''; $('#wlegend').innerHTML = '';
+      box.innerHTML = '<div class="empty" style="padding:20px 0">還沒有體重紀錄</div>'; $('#wnote').textContent = hint; return;
+    }
+    const ma = movingAvg(ws), last = ws[ws.length - 1], l = dateLabel(last.date);
+    const change = ma[ma.length - 1] - ws[0].kg;
+    const chTxt = ws.length < 2 ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${fmt(Math.abs(change))}`;
+    $('#wstats').innerHTML = `
+      <div class="stat"><div class="lbl">最新（${l.md}）</div><div class="v num">${counter(last.kg, 1)}<small>公斤</small></div></div>
+      <div class="stat"><div class="lbl">7 天平均</div><div class="v num">${counter(Math.round(ma[ma.length - 1] * 10) / 10, 1)}<small>公斤</small></div></div>
+      <div class="stat"><div class="lbl">比 ${dateLabel(ws[0].date).md} 變化</div><div class="v num" style="color:${ws.length > 1 && change < 0 ? 'var(--good)' : 'inherit'}">${chTxt}<small>公斤</small></div></div>`;
+    $('#wlegend').innerHTML = `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="var(--surface-1)" stroke="var(--text-muted)" stroke-width="2"/></svg>每日體重</span>
+      <span><svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="var(--series-1)" stroke-width="3" stroke-linecap="round"/></svg>7 天平均</span>`;
+    play($('#wstats'));
+    $('#wnote').textContent = ws.length < 5 ? hint : '單日起伏不用在意，藍線一路往下就是在減。';
+
+    const W = Math.max(box.clientWidth || 880, 300), H = 220, pad = { l: 50, r: 16, t: 14, b: 34 };
+    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b, fs = W < 480 ? 12 : 14;
+    const n0 = dayNum(ws[0].date), n1 = dayNum(last.date), span = Math.max(n1 - n0, 1);
+    const x = s => ws.length === 1 ? pad.l + iw / 2 : pad.l + (dayNum(s) - n0) / span * iw;
+    const all = ws.map(w => w.kg).concat(ma);
+    let lo = Math.floor((Math.min(...all) - .5) * 2) / 2, hi = Math.ceil((Math.max(...all) + .5) * 2) / 2;
+    const stepV = hi - lo > 4 ? 1 : .5;
+    const y = v => pad.t + ih - (v - lo) / (hi - lo) * ih;
+    let g = '';
+    for (let v = lo; v <= hi + 1e-9; v += stepV) {
+      g += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/>
+        <text x="${pad.l - 8}" y="${y(v) + 4}" text-anchor="end" font-size="${fs}" fill="var(--text-muted)">${v.toFixed(1)}</text>`;
+    }
+    const every = Math.max(1, Math.ceil(ws.length / (W < 480 ? 5 : 8)));
+    const line = ws.length > 1 ? `<path class="wline" d="${ws.map((w, i) => `${i ? 'L' : 'M'}${x(w.date)},${y(ma[i])}`).join(' ')}" fill="none" stroke="var(--series-1)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>` : '';
+    const pts = ws.map((w, i) => {
+      const cx = x(w.date), lblOn = i === ws.length - 1 || (ws.length - 1 - i) % every === 0;
+      const hw = ws.length > 1 ? Math.max(iw / span / 2, 8) : 30;
+      return `<g class="hit whit" data-i="${i}">
+        <rect x="${cx - hw}" y="${pad.t}" width="${hw * 2}" height="${ih + pad.b}" fill="transparent"/>
+        <circle class="wdot" style="--i:${i}" cx="${cx}" cy="${y(w.kg)}" r="4.5" fill="var(--surface-1)" stroke="var(--text-muted)" stroke-width="2"/>
+        <text x="${cx}" y="${H - 8}" text-anchor="middle" font-size="${fs}" fill="var(--text-muted)">${lblOn ? dateLabel(w.date).md : ''}</text></g>`;
+    }).join('');
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="體重走勢">${g}${line}${pts}</svg><div class="tooltip" id="wtt"></div>`;
+    const path = box.querySelector('.wline');
+    if (path && !REDUCE) {
+      const L = path.getTotalLength();
+      path.style.strokeDasharray = L; path.style.strokeDashoffset = L;
+      requestAnimationFrame(() => requestAnimationFrame(() => { path.style.transition = 'stroke-dashoffset 1.2s var(--ease) .2s'; path.style.strokeDashoffset = 0; }));
+    }
+    const tt = $('#wtt'), svg = box.querySelector('svg');
+    box.querySelectorAll('.whit').forEach(el => {
+      const show = () => {
+        const i = +el.dataset.i, w = ws[i], dl = dateLabel(w.date);
+        tt.innerHTML = `<b>${dl.md} ${dl.wd}</b><div>體重 ${fmt(w.kg)} 公斤</div><div>7 天平均 ${fmt(ma[i])} 公斤</div>`;
+        const sb = svg.getBoundingClientRect(), sc = sb.width / W;
+        tt.style.left = Math.min(Math.max(x(w.date) * sc, 80), sb.width - 80) + 'px';
+        tt.style.top = (Math.min(y(w.kg), y(ma[i])) * sc - 10) + 'px';
+        tt.classList.add('show');
+      };
+      el.addEventListener('mouseenter', show); el.addEventListener('click', show);
+      el.addEventListener('mouseleave', () => tt.classList.remove('show'));
+    });
+    play(box);
+  }
+
   /* ---------- 手勢與鍵盤 ---------- */
   let sx = 0, sy = 0;
   document.addEventListener('touchstart', e => {
@@ -633,7 +734,7 @@
     if (e.key === 'ArrowRight') step(1);
   });
 
-  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => days.length && renderTrend(), 150); });
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (days.length) renderTrend(); if (weights) renderWeight(); updateFade(); }, 150); });
   window.addEventListener('hashchange', boot);
   boot();
 })();
