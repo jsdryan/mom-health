@@ -276,8 +276,8 @@
     { key: 'carbs',   name: '碳水',   color: 'var(--series-2)', kcalPerG: 4 },
     { key: 'fat',     name: '脂肪',   color: 'var(--series-3)', kcalPerG: 9 },
   ];
-  const MEAL_ICON = { '早餐': '🌅', '午餐': '☀️', '晚餐': '🌙', '點心': '🍎', '宵夜': '🌜' };
-  const MEAL_ORDER = ['早餐', '點心', '午餐', '下午點心', '晚餐', '宵夜'];
+  const MEAL_ICON = { '早餐': '🌅', '午餐': '☀️', '晚餐': '🌙', '點心': '🍎', '宵夜': '🌜', '下午點心': '🍎', '晚餐後': '🥤' };
+  const MEAL_ORDER = ['早餐', '點心', '午餐', '下午點心', '晚餐', '晚餐後', '宵夜'];
   const WD = ['日', '一', '二', '三', '四', '五', '六'];
   const fmt = n => (Math.round(n * 10) / 10).toLocaleString('zh-TW');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
